@@ -15,6 +15,9 @@ DEFAULT_CLOUDFLARE_BASE_URL = "https://api.cloudflare.com/client/v4"
 
 
 def _load_dotenv() -> dict[str, str]:
+    if os.environ.get("OIDC_HUNTER_SKIP_DOTENV") == "1":
+        return {}
+
     path = Path(".env")
     if not path.exists():
         return {}
@@ -83,7 +86,7 @@ class AppConfig:
     )
     agentic_timeout_seconds: float = field(
         default_factory=lambda: float(
-            _getenv("OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS", default="90") or "90"
+            _getenv("OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS", default="180") or "180"
         )
     )
     cloudflare_api_base_url: str = field(

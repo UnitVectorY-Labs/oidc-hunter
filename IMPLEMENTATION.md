@@ -15,30 +15,32 @@
 - [x] Added the bounded investigator Python execution tool with subprocess isolation and fallback tactic generation.
 - [x] Added durable per-run markdown reports, lessons learned, and tactic score updates under `data/`.
 - [x] Added importer and end-to-end deterministic workflow tests.
+- [x] Tightened the live ADK path by reducing loop model turns, adding stage-scoped timeouts, durable-state-aware fallback, and explicit progress logging.
+- [x] Added mocked ADK/LiteLLM stage-path coverage rather than only deterministic workflow coverage.
 - [x] Verified local compile and unit tests with Python 3.14.
 - [x] Verified local no-LLM smoke run creates state, candidates, lessons, and a report.
 - [x] Verified `container build -t oidc-hunter:dev .` succeeds with the macOS `container` command.
 - [x] Added `run.sh` to select `container`, then `docker`, then `podman`, while mounting `data/` as persistent state.
+- [x] Verified real live-model runs after the ADK refactor, including a packaged `run.sh` execution against mounted `data/` and a host-side run that exposed and fixed ADK `State` mutation issues.
 
 ## Outstanding
 
-- [ ] Tighten the live agentic path so slower local-model endpoints complete more often before the deterministic fallback is needed.
-- [ ] Add mocked ADK/LiteLLM agent-path integration coverage rather than only deterministic workflow coverage.
+- None in the current implementation checklist.
 
 ## Next Steps
 
-1. Reduce prompt and tool-call overhead in the live ADK path so bounded runs finish faster against the configured local model endpoint.
-2. Add ADK-path tests that stub LiteLLM responses and verify loop progression without depending on the external model server.
-3. Expand review heuristics for suspicious issuer-domain relationships and candidate staleness handling.
-4. Add richer retained probe artifacts for ambiguous-but-interesting findings.
+1. Expand review heuristics for suspicious issuer-domain relationships and candidate staleness handling.
+2. Add richer retained probe artifacts for ambiguous-but-interesting findings.
+3. Investigate why the current local endpoint still times out some ADK stages even with the larger default budget, and decide whether further prompt simplification or endpoint-side tuning is warranted.
 
 ## Verification Notes
 
 - Local unit tests: `.venv/bin/python -m unittest discover`
-- Local no-LLM smoke: `OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-local-smoke3 .venv/bin/python -m oidc_hunter`
+- Local no-LLM smoke: `OIDC_HUNTER_SKIP_DOTENV=1 OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-local-verify-2 .venv/bin/python -m oidc_hunter`
 - Container build: `container build -t oidc-hunter:dev .`
 - Packaged run wrapper: `./run.sh`
-- Live packaged verification: catalog and Cloudflare fetches succeeded inside the mounted `data/` workflow; the resulting artifacts were used to fix Cloudflare response parsing and add explicit agentic timeouts plus deterministic fallback.
+- Live packaged verification: on 2026-04-26, `./run.sh` fetched the live catalog and Cloudflare seeds into mounted `data/`, persisted SQLite state plus artifacts, and completed with stage-scoped ADK fallback instead of rerunning the whole workflow.
+- Live host-side verification: on 2026-04-26, a direct `.venv/bin/python -m oidc_hunter` run against the configured local model surfaced an ADK `tool_context.state` mutation bug, which was fixed by replacing `.pop()` calls with key-safe deletion.
 
 ## Managed File Note
 

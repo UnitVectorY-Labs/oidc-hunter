@@ -15,9 +15,11 @@ The current implementation runs a bounded workflow with:
 - live JWKS Catalog import on every run
 - persisted `data/candidates.yaml` import and regeneration
 - Cloudflare Radar top-domain seeding
-- a `SequentialAgent` root workflow
-- bounded investigation and candidate-review `LoopAgent`s
+- a `SequentialAgent` root workflow plus stage-scoped ADK execution
+- bounded investigation and candidate-review `LoopAgent`s with one LLM turn per loop iteration
 - a constrained investigator Python execution tool
+- stage-by-stage deterministic fallback when a slower local model times out
+- explicit progress logging around initialization, planning, investigation, review, and finalization
 - SQLite-backed run history, domain state, clusters, decisions, tactic scores, and lessons learned
 
 Runtime configuration is supplied with environment variables:
@@ -30,7 +32,7 @@ Runtime configuration is supplied with environment variables:
 | `OIDC_HUNTER_LLM_MODEL` | Model name passed to ADK/LiteLLM. |
 | `OIDC_HUNTER_LLM_API_KEY` | Optional API key for the OpenAI-compatible endpoint. |
 | `OIDC_HUNTER_LLM_TIMEOUT_SECONDS` | Per-request LiteLLM timeout. Defaults to `45`. |
-| `OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS` | Global timeout for the ADK phase before deterministic fallback. Defaults to `90`. |
+| `OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS` | Total ADK budget shared across planning, investigation, and review before stage-level deterministic fallback. Defaults to `180`. |
 | `OIDC_HUNTER_CLOUDFLARE_API_TOKEN` | Cloudflare Radar API token. |
 | `OIDC_HUNTER_CLOUDFLARE_DATASET_ALIAS` | Optional Radar dataset alias such as `ranking_top_1000`. |
 | `OIDC_HUNTER_CLOUDFLARE_TOP_LIMIT` | Ordered Cloudflare top-domain limit. Defaults to `100`. |
@@ -44,3 +46,5 @@ Runtime configuration is supplied with environment variables:
 | `OIDC_HUNTER_KEEP_PROBE_ARTIFACTS` | Set to `1` to keep probe artifacts for all results. |
 
 The primary operator path is [`run.sh`](/Users/jaredhatfield/github/oidc-hunter/run.sh), which mounts [`data/`](/Users/jaredhatfield/github/oidc-hunter/data) into the container at `/data` and prefers the macOS `container` runtime before falling back to `docker` or `podman`.
+
+On verified live runs on 2026-04-26, the mounted `data/` workflow persisted SQLite state, `candidates.yaml`, reports, lessons, and per-run artifacts correctly. The current local endpoint can still time out some ADK stages, but the workflow now falls back stage-by-stage instead of restarting the whole run.

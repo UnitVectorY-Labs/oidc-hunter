@@ -92,8 +92,25 @@ class WorkflowTools:
         self.run_dir = run_dir
         self.local_state: dict[str, Any] = {}
 
+    def log(self, message: str) -> None:
+        print(f"[oidc-hunter] {message}", flush=True)
+
+    def record_fallback(self, stage_name: str, reason: str) -> None:
+        fallback = {"stage": stage_name, "reason": reason}
+        reasons = list(self.local_state.get("llm_fallback_reasons", []))
+        reasons.append(fallback)
+        self.local_state["llm_fallback_reasons"] = reasons
+        if "llm_fallback_reason" not in self.local_state:
+            self.local_state["llm_fallback_reason"] = f"{stage_name}: {reason}"
+
     def state_dict(self, tool_context=None) -> MutableMapping[str, Any]:
         return tool_context.state if tool_context is not None else self.local_state
+
+    def _clear_state_key(self, state: MutableMapping[str, Any], key: str) -> None:
+        try:
+            del state[key]
+        except KeyError:
+            pass
 
     def ensure_run_started(self) -> None:
         with database(self.config.db_path) as conn:
@@ -202,6 +219,11 @@ class WorkflowTools:
             "cloudflare_error": cloudflare_error,
             "probe_timeout_seconds": self.config.probe_timeout_seconds,
         }
+        self.log(
+            "Initialization complete: "
+            f"catalog={catalog_count}, candidates={candidate_count}, "
+            f"seed_source={seed_batch.source}, seed_count={len(batch_sample)}"
+        )
         return state["initialization_summary"]
 
     def load_run_context(self, tool_context=None) -> dict[str, Any]:
@@ -348,6 +370,11 @@ class WorkflowTools:
                 """,
                 (self.run_id, plan_text, plan_text, utc_now()),
             )
+        self.log(
+            "Recorded run plan with tactics: "
+            + ", ".join(normalized)
+            + f" (budget={plan['target_budget']})"
+        )
         return {
             "selected_tactics": normalized,
             "target_budget": plan["target_budget"],
@@ -498,6 +525,10 @@ class WorkflowTools:
         state["current_batch_ref"] = batch_ref
         state["current_batch_targets"] = result["targets"]
         state["current_batch_notes"] = result["notes"]
+        self.log(
+            f"Prepared investigation batch {batch_ref} with "
+            f"{len(result['targets'])} targets for tactic {tactic_id}."
+        )
         return {
             "batch_ref": batch_ref,
             "target_count": len(result["targets"]),
@@ -621,6 +652,10 @@ class WorkflowTools:
             "artifact_ref": str(summary_path),
         }
         state["last_probe_summary"] = probe_summary
+        self.log(
+            f"Probed batch {ref}: targets={len(targets)}, valid_oidc={len(valid_results)}, "
+            f"classifications={probe_summary['classifications']}"
+        )
         return probe_summary
 
     def load_investigation_progress(self, tool_context=None) -> dict[str, Any]:
@@ -671,9 +706,9 @@ class WorkflowTools:
                 """,
                 (self.run_id, current),
             )
-        state.pop("current_tactic", None)
-        state.pop("current_batch_ref", None)
-        state.pop("current_batch_targets", None)
+        self._clear_state_key(state, "current_tactic")
+        self._clear_state_key(state, "current_batch_ref")
+        self._clear_state_key(state, "current_batch_targets")
         return {"tactic_id": current, "outcome": outcome}
 
     def load_next_candidate_cluster(self, tool_context=None) -> dict[str, Any]:
@@ -816,6 +851,7 @@ class WorkflowTools:
                 ),
             )
         self._mark_cluster_reviewed(ref, tool_context)
+        self.log(f"Rejected cluster {ref}: {reason}")
         return {"cluster_id": ref, "decision": "reject"}
 
     def mark_cluster_for_followup(
@@ -857,6 +893,7 @@ class WorkflowTools:
                 ),
             )
         self._mark_cluster_reviewed(ref, tool_context)
+        self.log(f"Deferred cluster {ref} for follow-up: {actions}")
         return {"cluster_id": ref, "decision": "needs_more_evidence"}
 
     def promote_cluster(
@@ -969,6 +1006,7 @@ class WorkflowTools:
                 ),
             )
         self._mark_cluster_reviewed(ref, tool_context)
+        self.log(f"Promoted cluster {ref} with decision {decision}.")
         return {"cluster_id": ref, "decision": decision}
 
     def load_candidates_for_export(self, tool_context=None) -> dict[str, Any]:
@@ -1184,20 +1222,42 @@ class WorkflowTools:
 
         self.initialize_run()
         self.load_run_context()
-        self.record_run_plan()
+        self.deterministic_plan()
+        await self.deterministic_investigation()
+        self.deterministic_review()
+        return self.finalize_run()
+
+    def deterministic_plan(self) -> dict[str, Any]:
+        """Persist the default bounded run plan."""
+
+        self.log("Running deterministic planning stage.")
+        return self.record_run_plan()
+
+    async def deterministic_investigation(self) -> None:
+        """Run the bounded deterministic investigation loop."""
+
+        self.log("Running deterministic investigation stage.")
         for _ in range(self.config.investigation_iterations):
             tactic = self.load_plan_batch()
             if tactic.get("status") == "no_remaining_tactics":
+                self.log("No remaining tactics to investigate.")
                 break
             probe_batch = self.execute_investigation_python()
             if probe_batch.get("status") == "no_remaining_tactics":
+                self.log("Investigation batch generation reported no remaining tactics.")
                 break
             self.record_investigation_output(summary="Deterministic fallback execution.")
             await self.probe_oidc_candidates()
             self.mark_tactic_outcome()
+
+    def deterministic_review(self) -> None:
+        """Run the deterministic candidate review loop."""
+
+        self.log("Running deterministic review stage.")
         for _ in range(self.config.review_iterations):
             cluster = self.load_next_candidate_cluster()
             if cluster.get("status") == "no_pending_clusters":
+                self.log("No pending clusters left to review.")
                 break
             evidence = self.load_cluster_evidence(cluster["cluster_id"])
             known_match = evidence.get("known_match")
@@ -1211,11 +1271,46 @@ class WorkflowTools:
                     if len(evidence.get("domains", [])) <= 1
                     else "attach_as_alternative_domain"
                 )
+
+    def finalize_run(self) -> dict[str, Any]:
+        """Render final artifacts and close the run."""
+
+        self.log("Finalizing run artifacts.")
         self.write_candidates_yaml()
         self.append_lessons_learned()
         self.update_strategy_scores()
         self.write_run_report()
-        return self.close_current_run()
+        outcome = self.close_current_run()
+        self.log(f"Run finalized with summary: {outcome['summary']}")
+        return outcome
+
+    def has_recorded_run_plan(self) -> bool:
+        with database(self.config.db_path) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM run_plans WHERE run_id = ? LIMIT 1",
+                (self.run_id,),
+            ).fetchone()
+        return row is not None
+
+    def has_investigation_activity(self) -> bool:
+        with database(self.config.db_path) as conn:
+            batch = conn.execute(
+                "SELECT 1 FROM investigation_batches WHERE run_id = ? LIMIT 1",
+                (self.run_id,),
+            ).fetchone()
+            probe = conn.execute(
+                "SELECT 1 FROM probe_results WHERE run_id = ? LIMIT 1",
+                (self.run_id,),
+            ).fetchone()
+        return batch is not None or probe is not None
+
+    def has_review_activity(self) -> bool:
+        with database(self.config.db_path) as conn:
+            decision = conn.execute(
+                "SELECT 1 FROM candidate_decisions WHERE run_id = ? LIMIT 1",
+                (self.run_id,),
+            ).fetchone()
+        return decision is not None
 
     def _default_plan(self) -> dict[str, Any]:
         return {
@@ -1569,11 +1664,12 @@ class WorkflowTools:
         if cluster_id not in reviewed:
             reviewed.append(cluster_id)
         state["reviewed_clusters"] = reviewed
-        state.pop("current_cluster_id", None)
+        self._clear_state_key(state, "current_cluster_id")
 
     def _build_report_markdown(self, state: MutableMapping[str, Any], outcome: dict[str, Any]) -> str:
         plan = state.get("run_plan", {})
         fallback_reason = state.get("llm_fallback_reason")
+        fallback_reasons = state.get("llm_fallback_reasons", [])
         lines = [
             f"# oidc-hunter run {self.run_id}",
             "",
@@ -1619,8 +1715,12 @@ class WorkflowTools:
                     "",
                     "## LLM Fallback",
                     "",
-                    "```text",
-                    str(fallback_reason),
+                    "```json",
+                    json.dumps(
+                        fallback_reasons or [{"stage": "unknown", "reason": str(fallback_reason)}],
+                        indent=2,
+                        sort_keys=True,
+                    ),
                     "```",
                 ]
             )

@@ -49,6 +49,30 @@ The repo currently carries a `.env` file with these legacy names:
 
 Set `OIDC_HUNTER_SKIP_DOTENV=1` to prevent `run.sh` from sourcing `.env`.
 
+The application itself also honors `OIDC_HUNTER_SKIP_DOTENV=1`, so direct local runs like `.venv/bin/python -m oidc_hunter` can bypass `.env` as well.
+
+## Runtime Logs
+
+The application now prints concise progress markers for:
+
+- initialization
+- planning
+- investigation batch generation and probing
+- candidate review decisions
+- finalization
+
+This makes it much easier to tell whether a slower local model is still working, whether a stage has timed out, and when the workflow has switched to deterministic fallback.
+
+## ADK Fallback Behavior
+
+`OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS` is the total ADK budget for one run. The default is `180`, and the app currently splits that budget across:
+
+- planning
+- investigation
+- review
+
+If a stage times out, the app falls back only for that stage instead of rerunning the whole workflow from scratch. Reports record the fallback stages in a structured `LLM Fallback` section.
+
 ## Useful Overrides
 
 ```bash
@@ -61,6 +85,12 @@ OIDC_HUNTER_CLOUDFLARE_SEED_SAMPLE_SIZE=5 \
 
 ```bash
 OIDC_HUNTER_LLM_TIMEOUT_SECONDS=30 \
-OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS=90 \
+OIDC_HUNTER_AGENTIC_TIMEOUT_SECONDS=180 \
 ./run.sh
+```
+
+```bash
+OIDC_HUNTER_SKIP_DOTENV=1 \
+OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-local \
+.venv/bin/python -m oidc_hunter
 ```
