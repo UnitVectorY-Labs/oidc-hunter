@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oidc-hunter"
+version = "0.1.0"
+description = "An autonomous agent that discovers public OpenID Connect endpoints, verifies them, and maintains a reviewable candidate set for catalog inclusion."
+readme = "README.md"
+requires-python = ">=3.14" # PYTHONVERSION
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

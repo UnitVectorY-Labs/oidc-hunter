@@ -1,0 +1,11 @@
+name: oidc-hunter
+default_branch: main
+config:
+  description: "An autonomous agent that discovers public OpenID Connect endpoints, verifies them, and maintains a reviewable candidate set for catalog inclusion."
+  license: MIT
+  language: python
+  release: docker-python
+  justfile: true
+  status: wip
+  docs:
+    enabled: true
