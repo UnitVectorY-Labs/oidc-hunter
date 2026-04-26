@@ -142,3 +142,7 @@ $RECYCLE.BIN/
 ## Universal Ignore Patterns
 
 *.log
+
+## Additional Ignore Patterns
+data
+.env

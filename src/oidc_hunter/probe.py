@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -51,6 +52,50 @@ def probe_domain(domain: str, timeout_seconds: float) -> ProbeResult:
     if isinstance(issuer, str) and isinstance(jwks_uri, str):
         return ProbeResult(normalized, "ok", "valid_oidc", url, issuer, jwks_uri)
     return ProbeResult(normalized, "ok", "missing_required_fields", url)
+
+
+async def _probe_domain_async(
+    client: httpx.AsyncClient, domain: str, timeout_seconds: float
+) -> ProbeResult:
+    normalized = normalize_domain(domain)
+    url = f"https://{normalized}/.well-known/openid-configuration"
+    try:
+        response = await client.get(url, timeout=timeout_seconds, follow_redirects=True)
+    except httpx.TimeoutException as exc:
+        return ProbeResult(normalized, "timeout", "timeout", url, error=str(exc))
+    except httpx.HTTPError as exc:
+        return ProbeResult(normalized, "error", "request_error", url, error=str(exc))
+
+    if response.status_code == 404:
+        return ProbeResult(normalized, "not_found", "not_found", url)
+    if response.status_code >= 400:
+        return ProbeResult(
+            normalized, f"http_{response.status_code}", "invalid_response", url
+        )
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        return ProbeResult(normalized, "ok", "invalid_json", url, error=str(exc))
+
+    issuer = payload.get("issuer")
+    jwks_uri = payload.get("jwks_uri")
+    if isinstance(issuer, str) and isinstance(jwks_uri, str):
+        return ProbeResult(normalized, "ok", "valid_oidc", url, issuer, jwks_uri)
+    return ProbeResult(normalized, "ok", "missing_required_fields", url)
+
+
+async def probe_many_domains(
+    domains: list[str], timeout_seconds: float, concurrency: int
+) -> list[ProbeResult]:
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+
+    async with httpx.AsyncClient() as client:
+        async def run_one(domain: str) -> ProbeResult:
+            async with semaphore:
+                return await _probe_domain_async(client, domain, timeout_seconds)
+
+        return list(await asyncio.gather(*(run_one(domain) for domain in domains)))
 
 
 def store_probe_result(conn, run_id: str, result: ProbeResult) -> None:

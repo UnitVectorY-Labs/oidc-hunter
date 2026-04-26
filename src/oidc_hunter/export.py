@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -27,6 +28,9 @@ def render_candidates_yaml(conn) -> str:
             entry["openid_configuration"] = row["openid_configuration_url"]
         if row["jwks_uri"]:
             entry["jwks_uri"] = row["jwks_uri"]
+        aliases = json.loads(row["aliases_json"] or "[]")
+        if aliases:
+            entry["aliases"] = aliases
         candidates.append(entry)
     return yaml.safe_dump({"candidates": candidates}, sort_keys=False)
 

@@ -7,34 +7,80 @@ permalink: /tools
 
 # Tools
 
-The first implementation pass has deterministic internal tool functions rather than the full planned ADK tool surface. These functions are intentionally narrow so they can become ADK function tools later.
+The application now exposes the planned workflow through a deterministic tool layer that the ADK agents call.
 
-## Catalog Import
+## Initialization Tools
 
-Imports the live JWKS Catalog `services.yaml` into SQLite for exclusion matching. The importer tolerates these OpenID configuration key variants:
+- live catalog fetch and import
+- `candidates.yaml` import and snapshot recording
+- Cloudflare Radar batch fetch
+- tactic table initialization
+
+The catalog importer tolerates these OpenID configuration key variants:
 
 - `openid-configuration`
 - `openid_configuration`
 - `open_id_configuration`
 
-The catalog remains read-only input for this application.
+## Planning Tools
 
-## Candidate Import and Export
+- `load_cloudflare_batch_metadata`
+- `sample_candidate_tlds`
+- `load_heuristics_library`
+- `record_run_plan`
 
-Loads `state/candidates.yaml` as the provisional known set. If the file is missing, the app initializes it with an empty candidate list.
+These tools keep full Cloudflare data out of prompt context and return only compact samples plus artifact references.
 
-After each run, active candidates are rendered deterministically from SQLite back to `state/candidates.yaml`.
+## Investigation Tools
 
-## OIDC Probe
+- `load_plan_batch`
+- `load_domain_history_summary`
+- `load_known_issuers_summary`
+- `execute_investigation_python`
+- `record_investigation_output`
 
-For each configured domain, the probe checks:
+`execute_investigation_python` runs investigator-authored code inside a bounded subprocess with:
+
+- a restricted builtin set
+- no import support
+- run-scoped input and output files only
+- a hard subprocess timeout
+
+If the generated code fails or produces no useful targets, the application falls back to built-in tactic generation.
+
+## Verification Tools
+
+- `probe_oidc_candidates`
+- `load_investigation_progress`
+- `mark_tactic_outcome`
+
+Each probe checks:
 
 ```text
 https://<domain>/.well-known/openid-configuration
 ```
 
-Valid responses must contain both `issuer` and `jwks_uri`. Probe summaries are stored in SQLite `domain_state`; raw response bodies are not stored.
+Valid responses are clustered by issuer and JWKS URI. The system persists probe summaries, domain state, issuer clusters, and known-set matches in SQLite.
 
-## ADK Planning
+## Review Tools
 
-When `OIDC_HUNTER_LLM_BASE_URL` and `OIDC_HUNTER_LLM_MODEL` are set, the app creates an ADK planning agent backed by an OpenAI-compatible LiteLLM model. The agent receives only the compact initialization summary and returns a bounded plan that is saved in SQLite and the run report.
+- `load_next_candidate_cluster`
+- `load_cluster_evidence`
+- `record_analysis_notes`
+- `mark_cluster_rejected`
+- `mark_cluster_for_followup`
+- `promote_cluster`
+
+Promotion either creates a new active candidate or merges additional domains into an existing active candidate's alias list.
+
+## Export and Reporting Tools
+
+- `load_candidates_for_export`
+- `write_candidates_yaml`
+- `load_run_outcome_summary`
+- `append_lessons_learned`
+- `update_strategy_scores`
+- `write_run_report`
+- `close_current_run`
+
+The final `candidates.yaml` is rendered deterministically from SQLite. The LLM never patches that file directly.

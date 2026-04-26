@@ -2,48 +2,43 @@
 
 ## Completed
 
-- [x] Added a first-pass Python package under `src/oidc_hunter`.
+- [x] Added the first-pass Python package under `src/oidc_hunter`.
 - [x] Added a managed-Dockerfile-compatible `src/main.py` entrypoint.
-- [x] Added environment-driven configuration for state paths, catalog URL, OpenAI-compatible LLM base URL, model name, API key, and optional probe domains.
-- [x] Added SQLite initialization with first-pass tables for runs, catalog entries, candidate entries, domain state, run plans, and candidate decisions.
+- [x] Added environment-driven configuration for state paths, catalog URL, OpenAI-compatible LLM base URL, model name, API key, optional Cloudflare configuration, and bounded runtime controls.
+- [x] Moved the default durable state layout to `data/` with SQLite, `candidates.yaml`, reports, lessons, and per-run artifacts.
+- [x] Expanded SQLite initialization to include snapshots, tactic metadata, investigation batches, probe summaries, issuer clusters, decisions, and lessons learned.
 - [x] Added catalog and `candidates.yaml` importers that tolerate the key variants called out in `DESIGN.md`.
-- [x] Added deterministic OIDC probing for configured domains using `https://<domain>/.well-known/openid-configuration`.
-- [x] Added deterministic candidate export to `state/candidates.yaml`.
-- [x] Added a first ADK planning step that uses an OpenAI-compatible LiteLLM model only from environment-provided settings.
-- [x] Added durable per-run markdown reports under `state/reports`.
-- [x] Added basic importer tests.
+- [x] Added Cloudflare Radar top-domain ingestion and persisted seed-batch artifacts.
+- [x] Added deterministic OIDC probing for candidate domains using `https://<domain>/.well-known/openid-configuration`.
+- [x] Added issuer clustering, known-set matching, candidate promotion, alternative-domain handling, and deterministic candidate export.
+- [x] Added a `SequentialAgent` root workflow with bounded investigation and review `LoopAgent`s.
+- [x] Added the bounded investigator Python execution tool with subprocess isolation and fallback tactic generation.
+- [x] Added durable per-run markdown reports, lessons learned, and tactic score updates under `data/`.
+- [x] Added importer and end-to-end deterministic workflow tests.
 - [x] Verified local compile and unit tests with Python 3.14.
-- [x] Verified local no-LLM smoke run creates state, candidates, and a report.
-- [x] Verified ADK/LiteLLM planning against the OpenAI-compatible development endpoint using environment-provided URL and model values.
+- [x] Verified local no-LLM smoke run creates state, candidates, lessons, and a report.
 - [x] Verified `container build -t oidc-hunter:dev .` succeeds with the macOS `container` command.
-- [x] Verified `container run --rm --env OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-state oidc-hunter:dev` starts and completes.
+- [x] Added `run.sh` to select `container`, then `docker`, then `podman`, while mounting `data/` as persistent state.
 
 ## Outstanding
 
-- [ ] Replace the first-pass linear orchestration with the full `SequentialAgent` workflow described in `PLAN.md`.
-- [ ] Add the bounded investigation Python execution tool.
-- [ ] Add Cloudflare top-domain ingestion and sampling.
-- [ ] Add richer known-set matching by issuer, OpenID configuration URL, JWKS URI, primary domain, and aliases.
-- [ ] Add candidate clustering and alternative-domain handling.
-- [ ] Add review loops for candidate analysis and candidate decisions.
-- [ ] Add strategy tactic scoring, coverage summaries, and lessons learned.
-- [ ] Harden sandboxing, timeouts, and artifact retention for agent-authored investigation code.
-- [ ] Add integration tests with mocked HTTP endpoints and mocked ADK/LiteLLM responses.
+- [ ] Tighten the live agentic path so slower local-model endpoints complete more often before the deterministic fallback is needed.
+- [ ] Add mocked ADK/LiteLLM agent-path integration coverage rather than only deterministic workflow coverage.
 
 ## Next Steps
 
-1. Introduce Cloudflare input ingestion and make the ADK planning output select a small deterministic probe batch.
-2. Expand candidate export semantics so prior candidates, newly discovered candidates, and rejected findings are represented with clearer statuses.
-3. Convert the current deterministic functions into explicit ADK function tools for the planned `SequentialAgent`.
-4. Add integration tests with mocked catalog, candidate, OIDC discovery, and LLM endpoints.
+1. Reduce prompt and tool-call overhead in the live ADK path so bounded runs finish faster against the configured local model endpoint.
+2. Add ADK-path tests that stub LiteLLM responses and verify loop progression without depending on the external model server.
+3. Expand review heuristics for suspicious issuer-domain relationships and candidate staleness handling.
+4. Add richer retained probe artifacts for ambiguous-but-interesting findings.
 
 ## Verification Notes
 
 - Local unit tests: `.venv/bin/python -m unittest discover`
-- Local no-LLM smoke: `OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-smoke2 .venv/bin/python -m oidc_hunter`
-- Local ADK smoke: `OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-llm-smoke2 OIDC_HUNTER_LLM_BASE_URL=https://llm.unitvectory-labs.net/v1 OIDC_HUNTER_LLM_MODEL=gemma4-31b-it-q5kxl-instruct .venv/bin/python -m oidc_hunter`
+- Local no-LLM smoke: `OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-local-smoke3 .venv/bin/python -m oidc_hunter`
 - Container build: `container build -t oidc-hunter:dev .`
-- Container run: `container run --rm --env OIDC_HUNTER_STATE_DIR=/tmp/oidc-hunter-state oidc-hunter:dev`
+- Packaged run wrapper: `./run.sh`
+- Live packaged verification: catalog and Cloudflare fetches succeeded inside the mounted `data/` workflow; the resulting artifacts were used to fix Cloudflare response parsing and add explicit agentic timeouts plus deterministic fallback.
 
 ## Managed File Note
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -21,6 +22,16 @@ def _first_mapping_value(mapping: dict[str, Any], keys: tuple[str, ...]) -> Any:
     for key in keys:
         if key in mapping:
             return mapping[key]
+    return None
+
+
+def _primary_domain_from_urls(*values: Any) -> str | None:
+    for value in values:
+        if not isinstance(value, str) or not value:
+            continue
+        parsed = urlparse(value if "://" in value else f"https://{value}")
+        if parsed.netloc:
+            return parsed.netloc.lower()
     return None
 
 
@@ -49,7 +60,9 @@ def _iter_service_entries(data: Any) -> list[tuple[str | None, dict[str, Any]]]:
     return []
 
 
-def import_catalog_yaml(conn, run_id: str, yaml_text: str) -> int:
+def import_catalog_yaml(
+    conn, run_id: str, yaml_text: str, snapshot_id: str | None = None
+) -> int:
     data = yaml.safe_load(yaml_text) or {}
     rows = []
     for service_id, entry in _iter_service_entries(data):
@@ -59,6 +72,7 @@ def import_catalog_yaml(conn, run_id: str, yaml_text: str) -> int:
         )
         rows.append(
             (
+                snapshot_id,
                 run_id,
                 service_id,
                 entry.get("name") or service_id,
@@ -71,17 +85,19 @@ def import_catalog_yaml(conn, run_id: str, yaml_text: str) -> int:
     conn.executemany(
         """
         INSERT OR IGNORE INTO catalog_entries(
-            run_id, service_id, name, issuer_hint, openid_configuration_url,
+            snapshot_id, run_id, service_id, name, issuer_hint, openid_configuration_url,
             jwks_uri, aliases_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows,
     )
     return len(rows)
 
 
-def load_candidates(conn, candidates_path: Path) -> int:
+def load_candidates(
+    conn, candidates_path: Path, run_id: str | None = None, snapshot_id: str | None = None
+) -> int:
     if not candidates_path.exists():
         candidates_path.write_text("candidates: []\n", encoding="utf-8")
         return 0
@@ -100,29 +116,58 @@ def load_candidates(conn, candidates_path: Path) -> int:
         if not isinstance(entry, dict):
             continue
         candidate_id = entry.get("id") or entry.get("candidate_id") or f"candidate-{index}"
+        openid_configuration = _first_mapping_value(
+            entry,
+            ("openid-configuration", "openid_configuration", "open_id_configuration"),
+        )
+        issuer = entry.get("issuer")
+        jwks_uri = entry.get("jwks_uri")
+        primary_domain = _primary_domain_from_urls(
+            issuer, openid_configuration, jwks_uri, candidate_id
+        )
         rows.append(
             (
                 str(candidate_id),
                 entry.get("name") or candidate_id,
-                entry.get("issuer"),
-                _first_mapping_value(
-                    entry,
-                    ("openid-configuration", "openid_configuration", "open_id_configuration"),
-                ),
-                entry.get("jwks_uri"),
+                issuer,
+                openid_configuration,
+                jwks_uri,
+                primary_domain,
                 json.dumps(_as_list(entry.get("aliases")), sort_keys=True),
                 entry.get("status") or "active",
+                run_id,
+                run_id,
             )
         )
 
     conn.executemany(
         """
-        INSERT OR IGNORE INTO candidate_entries(
+        INSERT INTO candidate_entries(
             candidate_id, name, issuer, openid_configuration_url,
-            jwks_uri, aliases_json, status
+            jwks_uri, primary_domain, aliases_json, status, first_seen_run_id, last_seen_run_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(candidate_id) DO UPDATE SET
+            name = excluded.name,
+            issuer = excluded.issuer,
+            openid_configuration_url = excluded.openid_configuration_url,
+            jwks_uri = excluded.jwks_uri,
+            primary_domain = excluded.primary_domain,
+            aliases_json = excluded.aliases_json,
+            status = excluded.status,
+            source = 'candidate_file',
+            last_seen_run_id = excluded.last_seen_run_id
         """,
         rows,
     )
+    if snapshot_id:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO candidate_snapshots(
+                snapshot_id, run_id, source_path, artifact_ref, entry_count, imported_at
+            )
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """,
+            (snapshot_id, run_id or "unknown", str(candidates_path), str(candidates_path), len(rows)),
+        )
     return len(rows)
