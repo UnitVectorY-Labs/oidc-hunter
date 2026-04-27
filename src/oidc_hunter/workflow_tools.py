@@ -86,6 +86,10 @@ class KnownMatch:
 class WorkflowTools:
     """Tool surface for the OIDC hunter workflow."""
 
+    _CLEARED_STATE_DEFAULTS: dict[str, Any] = {
+        "current_batch_targets": [],
+    }
+
     def __init__(self, config: AppConfig, run_id: str, run_dir: Path):
         self.config = config
         self.run_id = run_id
@@ -107,10 +111,17 @@ class WorkflowTools:
         return tool_context.state if tool_context is not None else self.local_state
 
     def _clear_state_key(self, state: MutableMapping[str, Any], key: str) -> None:
+        missing = object()
         try:
             del state[key]
+            return
         except KeyError:
-            pass
+            return
+        except (AttributeError, NotImplementedError, TypeError):
+            current = state.get(key, missing)
+            if current is missing:
+                return
+            state[key] = self._CLEARED_STATE_DEFAULTS.get(key)
 
     def ensure_run_started(self) -> None:
         with database(self.config.db_path) as conn:

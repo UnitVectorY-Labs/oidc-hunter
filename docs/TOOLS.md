@@ -73,6 +73,8 @@ Valid responses are clustered by issuer and JWKS URI. The system persists probe 
 
 Promotion either creates a new active candidate or merges additional domains into an existing active candidate's alias list.
 
+Transient workflow cursor keys for investigation and review are cleared in a way that works with both normal Python dictionaries and ADK session-state wrappers that only support reads and writes. This prevents cluster decisions and tactic completion from failing during state cleanup.
+
 ## Export and Reporting Tools
 
 - `load_candidates_for_export`
