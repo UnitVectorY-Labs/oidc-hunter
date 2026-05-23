@@ -2,29 +2,29 @@
 commands:
 
  - name: "pythonversion"
-   params:
-   - name: "version"
-     pattern: "^(?P<major>0|[1-9]\\d*)\\.(?P<minor>0|[1-9]\\d*)\\.(?P<patch>0|[1-9]\\d*)$"
-   targets:
-   - path: "pyproject.toml"
-     pattern: "^requires-python = \">=(?P<version>.*)\" # PYTHONVERSION$"
-     transform: "{{major}}.{{minor}}"
-   - path: ".github/workflows/build-python.yml"
-     pattern: "^          python-version: '(?P<version>.*)' # PYTHONVERSION$"
-   - path: "Dockerfile"
-     pattern: "^FROM python:(?P<version>.*)-slim AS builder$"
-   - path: "Dockerfile"
-     pattern: "^FROM python:(?P<version>.*)-slim AS runtime$"
-   git:
-     create_branch: true
-     branch_name: "repver/python-v{{version}}"
-     commit: true
-     commit_message: "Update Python version to v{{version}}"
-     push: true
-     remote: "origin"
-     pull_request: "GITHUB_CLI"
-     return_to_original_branch: true
-     delete_branch: true
+    params:
+    - name: "version"
+      pattern: "^(?P<major>0|[1-9]\\d*)\\.(?P<minor>0|[1-9]\\d*)\\.(?P<patch>0|[1-9]\\d*)$"
+    targets:
+    - path: "pyproject.toml"
+      pattern: "^requires-python = \">=(?P<version>.*)\" # PYTHONVERSION$"
+      transform: "{{major}}.{{minor}}"
+    - path: ".github/workflows/build-python.yml"
+      pattern: "^          python-version: '(?P<version>.*)' # PYTHONVERSION$"
+    - path: "Dockerfile"
+      pattern: "^FROM python:(?P<version>.*)-slim AS builder$"
+    - path: "Dockerfile"
+      pattern: "^FROM python:(?P<version>.*)-slim AS runtime$"
+    git:
+      create_branch: true
+      branch_name: "repver/python-v{{version}}"
+      commit: true
+      commit_message: "Update Python version to v{{version}}"
+      push: true
+      remote: "origin"
+      pull_request: "GITHUB_CLI"
+      return_to_original_branch: true
+      delete_branch: true
 
  - name: "justthedocsversion"
    targets:

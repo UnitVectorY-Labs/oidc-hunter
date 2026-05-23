@@ -7,8 +7,6 @@ managed_files:
       management: file
     - path: .github/workflows/add-to-project.yml
       management: file
-    - path: .github/workflows/build-python.yml
-      management: file
     - path: .github/workflows/codeql-python.yml
       management: file
     - path: .github/workflows/docker-build-dev.yml
@@ -41,6 +39,4 @@ managed_files:
     - path: docs/_config.yml
       management: file
     - path: justfile
-      management: file
-    - path: pyproject.toml
       management: file
