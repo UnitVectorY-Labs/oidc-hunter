@@ -7,7 +7,7 @@ name = "oidc-hunter"
 version = "0.1.0"
 description = "An autonomous agent that discovers public OpenID Connect endpoints, verifies them, and maintains a reviewable candidate set for catalog inclusion."
 readme = "README.md"
-requires-python = ">=3.14" # PYTHONVERSION
+requires-python = ">=3.13" # PYTHONVERSION
 dependencies = [
     "google-adk[extensions]>=1.0.0",
     "httpx>=0.28.0",
