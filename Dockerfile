@@ -1,5 +1,5 @@
 # Use a builder image to create an isolated virtual environment with the app installed
-FROM python:3.15.0b4-slim AS builder
+FROM python:3.15.0rc1-slim AS builder
 
 # Build argument for version injection
 ARG VERSION=dev
@@ -24,7 +24,7 @@ RUN pip install --upgrade pip && \
     pip install .
 
 # Use a slim runtime image for running the application
-FROM python:3.15.0b4-slim AS runtime
+FROM python:3.15.0rc1-slim AS runtime
 
 # Python runtime defaults
 ENV PYTHONDONTWRITEBYTECODE=1 \
