@@ -13,6 +13,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Set the working directory inside the container
 WORKDIR /app
 
+# NOTE: The upstream gitrepoforge Dockerfile template should include these
+# builder dependencies. Python 3.15 may require compiling zstandard from source.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libzstd-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create a virtual environment for the application
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

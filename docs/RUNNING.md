@@ -7,6 +7,10 @@ permalink: /running
 
 # Running
 
+## Container Builds
+
+The Docker builder stage installs compiler tools and the Zstandard development library. Some dependencies, including `zstandard` on Python 3.15, may arrive as source archives and need these tools to build. The final runtime image does not include the compiler toolchain.
+
 The supported packaged entrypoint is [`run.sh`](/Users/jaredhatfield/github/oidc-hunter/run.sh).
 
 ## Runtime Selection
