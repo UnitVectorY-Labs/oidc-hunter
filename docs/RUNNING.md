@@ -17,6 +17,8 @@ The Dockerfile is managed by gitrepoforge. Its upstream template must retain all
 
 Pull requests validate the Docker image on native AMD64 and ARM64 runners before merging. Each build checks native dependency imports and runs the unit tests inside the final runtime image.
 
+The zizmor workflow security scan uses a GitHub-hosted Ubuntu runner so PR validation does not depend on availability of the self-hosted runner pool. This workflow is also managed by gitrepoforge; its upstream template needs the same runner setting.
+
 The supported packaged entrypoint is [`run.sh`](/Users/jaredhatfield/github/oidc-hunter/run.sh).
 
 ## Runtime Selection

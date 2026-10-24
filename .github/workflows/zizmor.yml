@@ -16,7 +16,8 @@ on:
 jobs:
   zizmor:
     name: zizmor latest via Cargo
-    runs-on: arc-runner-set
+    # Keep the upstream gitrepoforge template aligned with this hosted runner.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       security-events: write
