@@ -9,7 +9,15 @@ permalink: /running
 
 ## Container Builds
 
-The Docker builder stage installs compiler tools and the Zstandard development library. Some dependencies, including `zstandard` on Python 3.15, may arrive as source archives and need these tools to build. The final runtime image does not include the compiler toolchain.
+Both Docker stages use Python 3.14.4, matching the Python build-and-test workflow. Keep these versions aligned; moving containers to a prerelease interpreter can force dependencies without compatible wheels to build from source.
+
+The Docker builder stage installs compiler tools, the Zstandard development library (`libzstd-dev`), and the libffi development headers (`libffi-dev`). Dependencies may arrive as source archives and need these tools to build. Zstandard's isolated build environment can also build `cffi`, which requires the `ffi.h` header provided by `libffi-dev`. The final runtime image does not include the compiler toolchain.
+
+The Dockerfile is managed by gitrepoforge. Its upstream template must retain all three builder dependencies and align the container Python version with CI so regeneration does not reintroduce these build failures.
+
+Pull requests validate the Docker image on native AMD64 and ARM64 runners before merging. Each build checks native dependency imports and runs the unit tests inside the final runtime image.
+
+The zizmor workflow security scan uses a GitHub-hosted Ubuntu runner so PR validation does not depend on availability of the self-hosted runner pool. This workflow is also managed by gitrepoforge; its upstream template needs the same runner setting.
 
 The supported packaged entrypoint is [`run.sh`](/Users/jaredhatfield/github/oidc-hunter/run.sh).
 
