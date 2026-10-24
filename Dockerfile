@@ -14,9 +14,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # NOTE: The upstream gitrepoforge Dockerfile template should include these
-# builder dependencies. Python 3.15 may require compiling zstandard from source.
+# builder dependencies, including libffi-dev for cffi. Python 3.15 may require
+# compiling zstandard and its cffi build dependency from source.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libffi-dev \
     libzstd-dev \
     && rm -rf /var/lib/apt/lists/*
 

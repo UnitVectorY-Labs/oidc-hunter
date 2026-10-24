@@ -1,0 +1,36 @@
+name: Validate Docker Images
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Docker (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build --tag oidc-hunter:test .
+
+      - name: Verify native dependency imports
+        run: docker run --rm --entrypoint python oidc-hunter:test -c "import cffi, zstandard; import oidc_hunter.adk_app"
+
+      - name: Run tests in the runtime image
+        run: docker run --rm --volume "${GITHUB_WORKSPACE}/tests:/app/tests:ro" --entrypoint python oidc-hunter:test -m unittest discover
