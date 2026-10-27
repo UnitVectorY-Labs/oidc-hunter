@@ -29,14 +29,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: Generate SBOM
+        run: >-
+          docker buildx build
+          --platform linux/${{ matrix.arch }}
+          --attest type=sbom
+          --output type=local,dest=./sbom-export
+          .
+
       - name: Build image
         run: >-
           docker buildx build
           --platform linux/${{ matrix.arch }}
           --tag oidc-hunter:test
-          --attest type=sbom
-          --output type=docker
-          --output type=local,dest=./sbom-export
+          --sbom=false
+          --provenance=false
+          --load
           .
 
       - name: Upload SBOM
