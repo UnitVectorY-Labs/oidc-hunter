@@ -1,5 +1,5 @@
 # Use a builder image to create an isolated virtual environment with the app installed
-FROM python:3.14.4-slim AS builder
+FROM python:3.15.0-slim AS builder
 
 # Build argument for version injection
 ARG VERSION=dev
@@ -13,8 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Set the working directory inside the container
 WORKDIR /app
 
-# NOTE: The upstream gitrepoforge Dockerfile template should include these
-# builder dependencies, including libffi-dev for cffi. New Python versions may require
+# Builder dependencies for source builds. New Python versions may require
 # compiling zstandard and its cffi build dependency from source.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -33,7 +32,7 @@ RUN pip install --upgrade pip && \
     pip install .
 
 # Use a slim runtime image for running the application
-FROM python:3.14.4-slim AS runtime
+FROM python:3.15.0-slim AS runtime
 
 # Python runtime defaults
 ENV PYTHONDONTWRITEBYTECODE=1 \
